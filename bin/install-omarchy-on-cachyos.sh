@@ -94,7 +94,7 @@ elif [ "$SHELL" = "\/bin\/fish" ] && command -v mise &> /dev/null; then\
 
 # Copy omarchy installation files to ~/.local/share/omarchy
 mkdir -p ~/.local/share/omarchy
-cp -r * ~/.local/share/omarchy
+cp -r . ~/.local/share/omarchy
 cd ~/.local/share/omarchy
 
 # Pause and prompt for acknowledgment to begin installation
