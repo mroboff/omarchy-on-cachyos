@@ -69,7 +69,7 @@ cd omarchy-on-cachyos/bin
 chmod +x install-omarchy-on-cachyos.sh
 
 # Run the installation script
-install.sh
+./install-omarchy-on-cachyos.sh
 ```
 
 **Note:** Please review the script contents before running to understand what changes will be made to your system.
