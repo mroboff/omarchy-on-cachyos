@@ -95,9 +95,6 @@ sed -i '/run_logged \$OMARCHY_INSTALL\/login\/alt-bootloaders\.sh/d' install/log
 # Remove pacman.sh from post-install/all.sh to prevent conflict with cachyos packages
 sed -i '/run_logged \$OMARCHY_INSTALL\/post-install\/pacman\.sh/d' install/post-install/all.sh
 
-# Set TERMINAL variable in config/uwsm/env (add after the initial exports)
-sed -i '/^export/aexport TERMINAL=ghostty' config/uwsm/env
-
 # Update mise activation to support both bash and fish
 sed -i 's/omarchy-cmd-present mise && eval "\$(mise activate bash)"/if [ "\$SHELL" = "\/bin\/bash" ] \&\& command -v mise \&> \/dev\/null; then\n  eval "\$(mise activate bash)"\nelif [ "\$SHELL" = "\/bin\/fish" ] \&\& command -v mise \&> \/dev\/null; then\n  mise activate fish | source\nfi/' config/uwsm/env
 
