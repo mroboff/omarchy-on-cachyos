@@ -58,8 +58,19 @@ IMPORTANT: This script does not install CachyOS. You must do that separately (an
 
 5. This script now automatically handles NVIDIA driver installation by enforcing the proprietary 580xx drivers (via CachyOS `chwd`). This is necessary to avoid known regressions with hardware video decoding and browser flickering present in the newer open-kernel module drivers.
 
-   **Important:** To fully enable hardware acceleration in Firefox, you must manually add the following overrides to your `user.js`:
+   **Important:** 
 
+   To enable hardware video decode via NVDEC in chromium, you must:
+   
+   1. Add the following to `~/.config/chromium-flags.conf`:       ```       --enable-features=VaapiOnNvidiaGPUs       ```
+   2. Install the [enhanced-h264ify extension](https://chromewebstore.google.com/detail/enhanced-h264ify/omkfmpieigblcllmkgbflkikinpkodlk) and disable **VP8** and **AV1** codecs.
+   
+   
+   
+   To fully enable hardware acceleration in Firefox, you must 
+   
+   1. Install the [enhanced-h264ify add-on](https://addons.mozilla.org/en-US/firefox/addon/enhanced-h264ify/) and disable **VP8** and **AV1** codecs and manually add the following overrides to your `user.js`:
+   
    ```js
    // FORCE NVIDIA HARDWARE ACCELERATION
    user_pref("media.hardware-video-decoding.force-enabled", true);

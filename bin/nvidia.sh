@@ -34,7 +34,10 @@ sudo chwd -r nvidia-open-dkms --noconfirm || true
 echo "[*] Installing 580xx proprietary profile..."
 sudo chwd -a
 
-# 6. Add NVIDIA environment variables for UWSM
+# 6. Install VA-API utils
+sudo pacman -S --needed --noconfirm libva-utils
+
+# 7. Add NVIDIA environment variables for UWSM
 cat >>$HOME/.config/uwsm/env <<'EOF'
 
 # NVIDIA
