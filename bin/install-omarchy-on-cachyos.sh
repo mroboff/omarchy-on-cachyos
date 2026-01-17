@@ -50,6 +50,12 @@ sudo pacman-key --lsign-key F0134EE680CAC571
 echo -e "\n[omarchy]\nSigLevel = Optional TrustedOnly\nServer = https://pkgs.omarchy.org/\$arch" | sudo tee -a /etc/pacman.conf > /dev/null
 sudo pacman -Syu
 
+# Remove CachyOS SDDM config
+if [ -f /etc/sddm.conf ]; then
+    echo "Removing /etc/sddm.conf"
+    sudo rm /etc/sddm.conf
+fi
+
 # Prompt user for username
 echo ""
 echo "Please enter your username:"
@@ -113,6 +119,7 @@ echo " 4. Removed nvidia.sh from install.sh to avoid conflict with CachyOS graph
 echo " 5. Removed plymouth.sh from install.sh to avoid conflict with CachyOS login display manager installation."
 echo " 6. Removed limine-snapper.sh from install.sh to avoid conflict with CachyOS boot loader installation."
 echo " 7. Removed alt-bootloaders.sh from install.sh to avoid conflict with CachyOS boot loader installation."
+echo " 8. Removed /etc/sddm.conf to avoid conflict with Omarchy UWSM session autologin."
 echo ""
 echo "IMPORTANT: If you installed CachyOS without a deskop environment, you will not have a display manager installed." 
 echo "If this is the case, you will need to run the following command after this installation script is complete:"
