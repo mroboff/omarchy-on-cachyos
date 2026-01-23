@@ -10,16 +10,16 @@ This project provides an installation script for implementing DHH's Omarchy conf
 
 This installation script does the following three things:
 
- 1) Clones Omarchy from its github repository 
- 2) Makes adjustments to the Omarchy install scripts to support installation on CachyOS
- 3) Launches the installation of Omarchy on an already setup CachyOS system
+  1) Clones Omarchy from its github repository 
+  2) Makes adjustments to the Omarchy install scripts to support installation on CachyOS
+  3) Launches the installation of Omarchy on an already setup CachyOS system
+  4) Installs and configures NVIDIA 580xx proprietary drivers
 
 This script does not:
- 
+
  1) Install CachyOS or any other Linux operating system
  2) Partition, format, or encrypt hard disks
  3) Install or configure a boot loader
- 4) Install graphics drivers
  5) Install or configure a login display manager
 
 All of the above need to be done when you install CachyOS. 
@@ -40,7 +40,9 @@ The philosophy behind this script is to produce a strong and stable blend of Cac
 
 5. Login System: As a distribution, Omarchy skips installation of a login display manager. Instead, Hyprland autostarts and password protection is provided upon boot by the LUKS full disk encryption service. This script, however, assumes a display manager is installed. (Note: this script does not install a display manager, but also does not configure Hyprland to start automatically if a display manager is not installed.)
 
-6. Full Disk Encryption: As a distribution, Omarchy automatically turns on full disk encryption via LUKS. This script, however, leaves this decision up to the user. CachyOS can be installed with or without full disk encryption, and this script will install Omarchy on either setup.  
+6. Full Disk Encryption: As a distribution, Omarchy automatically turns on full disk encryption via LUKS. This script, however, leaves this decision up to the user. CachyOS can be installed with or without full disk encryption, and this script will install Omarchy on either setup.
+
+7. NVIDIA Drivers: *By default, CachyOS and Omarchy may attempt to use the latest NVIDIA drivers with open kernel modules. This script explicitly downgrades/pins the driver to the* *580xx proprietary series* *using CachyOS's* `chwd` *tool. This is a deliberate choice to fix widespread issues with hardware acceleration, electron apps, and browser flickering.*
 
 ## 4. Pre-Requisites
 
@@ -52,7 +54,35 @@ IMPORTANT: This script does not install CachyOS. You must do that separately (an
 
 3. Desktop Environment to Install: You can install a minimal system with no desktop environment or you can choose to install the CachyOS Hyprland Desktop Environment. If you have CachyOS install Hyprland, it will also install SDDM as the login display manager by default. Do not install GNOME or KDE.
 
-4. Graphics Drivers for NVIDIA users: If you are using an NVIDIA GPU, install the recommended graphics driver via CachyOS. The script will turn off driver installation in Omarchy. 
+4. Graphics Drivers for NVIDIA users: 
+
+5. This script now automatically handles NVIDIA driver installation by enforcing the proprietary 580xx drivers (via CachyOS `chwd`). This is necessary to avoid known regressions with hardware video decoding and browser flickering present in the newer open-kernel module drivers.
+
+   **Important:** 
+
+   To enable hardware video decode via NVDEC in chromium, you must:
+   
+   1. Add the following to `~/.config/chromium-flags.conf`:       ```       --enable-features=VaapiOnNvidiaGPUs       ```
+   2. Install the [enhanced-h264ify extension](https://chromewebstore.google.com/detail/enhanced-h264ify/omkfmpieigblcllmkgbflkikinpkodlk) and disable **VP8** and **AV1** codecs.
+   
+   
+   
+   To fully enable hardware acceleration in Firefox, you must 
+   
+   1. Install the [enhanced-h264ify add-on](https://addons.mozilla.org/en-US/firefox/addon/enhanced-h264ify/) and disable **VP8** and **AV1** codecs and manually add the following overrides to your `user.js`:
+   
+   ```js
+   // FORCE NVIDIA HARDWARE ACCELERATION
+   user_pref("media.hardware-video-decoding.force-enabled", true);
+   user_pref("media.hardware-video-encoding.force-enabled", true);
+   user_pref("layers.acceleration.force-enabled", true);
+   user_pref("webgl.force-enabled", true);
+   user_pref("media.ffmpeg.vaapi.enabled", true);
+   user_pref("media.rdd-ffmpeg.enabled", true);
+   user_pref("media.av1.enabled", true);
+   user_pref("widget.dmabuf.force-enabled", true);
+   user_pref("gfx.x11-egl.force-enabled", true);
+   ```
 
 Other configuration changes are up to you. Note, however, that this script has not been extensively tested on various CachyOS installations other than the author's own machine.
 
