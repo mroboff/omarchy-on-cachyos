@@ -96,14 +96,37 @@ sed -i '/tldr/d' install/omarchy-base.packages
 # Remove pacman.sh from preflight/all.sh to prevent conflict with cachyos packages
 sed -i '/run_logged \$OMARCHY_INSTALL\/preflight\/pacman\.sh/d' install/preflight/all.sh
 
-# Replace nvidia.sh with custom CachyOS Driver Logic (Preserves existing drivers)
-cp ../bin/nvidia.sh install/config/hardware/nvidia.sh
-chmod +x install/config/hardware/nvidia.sh
+GPU_NVIDIA=$(lspci -nn -d 10de: | grep -E "VGA|3D" | head -n1 | grep -oP '(?<=\[10de:)[0-9a-fA-F]{4}(?=\])')
 
-# Prevent Omarchy from installing Intel video acceleration and Vulkan drivers
-echo "Removing Intel/Vulkan driver installation scripts to preserve CachyOS defaults..."
-rm -f install/config/hardware/intel/video-acceleration.sh
-rm -f install/config/hardware/vulkan.sh
+if [[ -n "$GPU_NVIDIA" ]]; then
+    echo "NVIDIA GPU found with ID: $GPU_NVIDIA. Configuring CachyOS preservation..."
+    cp ../bin/nvidia.sh install/config/hardware/nvidia.sh
+    chmod +x install/config/hardware/nvidia.sh
+else
+    echo "No NVIDIA GPU found. Skipping."
+fi
+
+
+GPU_AMD=$(lspci -nn -d 1002: | grep -E "VGA|3D" | head -n1 | grep -oP '(?<=\[1002:)[0-9a-fA-F]{4}(?=\])')
+
+if [[ -n "$GPU_AMD" ]]; then
+    echo "AMD GPU found with ID: $GPU_AMD. Ensuring RADV/Mesa defaults..."
+    # cp ../bin/amd_optimize.sh install/config/hardware/amd.sh
+else
+    echo "No AMD GPU found."
+fi
+
+GPU_INTEL=$(lspci -nn -d 8086: | grep -E "VGA|3D" | head -n1 | grep -oP '(?<=\[8086:)[0-9a-fA-F]{4}(?=\])')
+
+if [[ -n "$GPU_INTEL" ]]; then
+    echo "Intel GPU found with ID: $GPU_INTEL. Managing video acceleration..."
+else
+    echo "No Intel GPU found."
+    #rm -f install/config/hardware/intel/video-acceleration.sh
+fi
+
+echo "Cleaning up generic Vulkan scripts to preserve CachyOS specific configurations..."
+#rm -f install/config/hardware/vulkan.sh
 
 # Remove plymouth.sh source line from install.sh
 sed -i '/run_logged \$OMARCHY_INSTALL\/login\/plymouth\.sh/d' install/login/all.sh
