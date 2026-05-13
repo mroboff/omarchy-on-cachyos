@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# 1. Get GPU ID
+# Check for NVIDIA GPU — skip entirely if none found
 GPU_ID=$(lspci -nn -d 10de: | grep -E "VGA|3D" | head -n1 | grep -oP '(?<=\[10de:)[0-9a-fA-F]{4}(?=\])' || true)
 
 if [[ -z "$GPU_ID" ]]; then
@@ -9,35 +9,13 @@ if [[ -z "$GPU_ID" ]]; then
     exit 0
 fi
 
-echo "[*] Found NVIDIA ID: $GPU_ID"
+echo "[*] Found NVIDIA GPU: $GPU_ID"
+echo "[*] Skipping driver installation — using CachyOS native NVIDIA drivers."
 
-# 2. Kill the conflicts
-echo "[*] Removing conflicting open-driver packages..."
-sudo pacman -Rdd --noconfirm libxnvctrl linux-cachyos-nvidia-open linux-cachyos-lts-nvidia-open nvidia-open-dkms 2>/dev/null || true
-
-# 3. Patch the file
-if ! grep -q "$GPU_ID" /var/lib/chwd/ids/nvidia-580.ids; then
-    echo "[*] Patching chwd ID list..."
-    if [ -n "$(tail -c1 /var/lib/chwd/ids/nvidia-580.ids)" ]; then
-        sudo sh -c "echo >> /var/lib/chwd/ids/nvidia-580.ids"
-    fi
-    sudo sed -i "\$a $GPU_ID" /var/lib/chwd/ids/nvidia-580.ids
-else
-    echo "[*] GPU ID already present in 580 list."
-fi
-
-# 4. Remove old profile
-echo "[*] Removing old chwd profile..."
-sudo chwd -r nvidia-open-dkms --noconfirm || true
-
-# 5. Install new profile
-echo "[*] Installing 580xx proprietary profile..."
-sudo chwd -a
-
-# 6. Install VA-API utils
+# Install VA-API utils
 sudo pacman -S --needed --noconfirm libva-utils
 
-# 7. Add NVIDIA environment variables for UWSM
+# Add NVIDIA environment variables for UWSM/Hyprland
 cat >>$HOME/.config/uwsm/env <<'EOF'
 
 # NVIDIA
