@@ -1,8 +1,12 @@
 #!/bin/bash
 
-# Target destination (relative to this script's location)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TARGET_DIR="$SCRIPT_DIR/../../omarchy"
+set -euo pipefail
+
+if [ -z "${OMARCHY_WORK_DIR:-}" ]; then
+    echo "Error: OMARCHY_WORK_DIR is not set. Run this script from install-omarchy-on-cachyos.sh."
+    exit 1
+fi
+
 REPO_URL="https://github.com/basecamp/omarchy"
 
 # Fetch available stable version tags from the remote repository cleanly
@@ -32,24 +36,25 @@ else
 fi
 
 # Ensure target directory is clean before git cloning to prevent fatal conflicts
-if [ -d "$TARGET_DIR" ]; then
+if [ -d "$OMARCHY_WORK_DIR" ]; then
     echo ""
-    echo "⚠️  Warning: An existing installation directory was found at $TARGET_DIR"
+    echo "Warning: An existing installation directory was found at $OMARCHY_WORK_DIR"
     read -r -p "Would you like to delete it and proceed with a clean install? [y/N]: " CONFIRM
     
     if [[ "${CONFIRM,,}" =~ ^(y|yes)$ ]]; then
-        echo "Cleaning up previous installation files at $TARGET_DIR..."
-        rm -rf "$TARGET_DIR"
+        echo "Cleaning up previous installation files at $OMARCHY_WORK_DIR..."
+        rm -rf "$OMARCHY_WORK_DIR"
     else
-        echo "Proceeding with existing files in $TARGET_DIR..."
+        echo "Proceeding with existing files in $OMARCHY_WORK_DIR..."
         # If user chooses not to delete, we should skip the clone but continue the script
         exit 0
     fi
 fi
 
 # Execute clean, quiet checkout bypassing standard detached HEAD advice warnings
-echo "Cloning into $TARGET_DIR..."
-if ! git -c advice.detachedHead=false clone --quiet $BRANCH_ARGS $REPO_URL "$TARGET_DIR"; then
+mkdir -p "$(dirname "$OMARCHY_WORK_DIR")"
+echo "Cloning into $OMARCHY_WORK_DIR..."
+if ! git -c advice.detachedHead=false clone --quiet $BRANCH_ARGS $REPO_URL "$OMARCHY_WORK_DIR"; then
     echo "Error: Failed to clone Omarchy repo."
     exit 1
 fi
