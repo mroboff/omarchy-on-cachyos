@@ -1,5 +1,13 @@
 #!/bin/bash
 
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+OMARCHY_WORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/.tmp/omarchy"
+OMARCHY_INSTALL_DIR="$HOME/.local/share/omarchy"
+
+export OMARCHY_WORK_DIR
+
 # Check if git is installed
 if ! command -v git &> /dev/null; then
     echo "Error: git is not installed. Please install git before running this script."
@@ -8,20 +16,19 @@ fi
 
 # Fetch Omarchy from repo
 echo "Fetching Omarchy source..."
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OMARCHY_DIR="$SCRIPT_DIR/../../omarchy"
 
-if [ -f "./fetch-omarchy.sh" ]; then
-    chmod +x ./fetch-omarchy.sh
-    ./fetch-omarchy.sh
+if [ -f "$SCRIPT_DIR/fetch-omarchy.sh" ]; then
+    chmod +x "$SCRIPT_DIR/fetch-omarchy.sh"
+    "$SCRIPT_DIR/fetch-omarchy.sh"
 else
     # Fallback if script is missing
     echo "fetch-omarchy.sh not found, falling back to default clone..."
-    git clone https://www.github.com/basecamp/omarchy "$OMARCHY_DIR"
+    mkdir -p "$(dirname "$OMARCHY_WORK_DIR")"
+    git clone https://www.github.com/basecamp/omarchy "$OMARCHY_WORK_DIR"
 fi
 
-if [ ! -d "$OMARCHY_DIR" ]; then
-    echo "Error: Failed to fetch Omarchy source at $OMARCHY_DIR"
+if [ ! -d "$OMARCHY_WORK_DIR" ]; then
+    echo "Error: Failed to fetch Omarchy source at $OMARCHY_WORK_DIR"
     exit 1
 fi
 
@@ -88,7 +95,7 @@ echo ""
 echo "Making adjustments to Omarchy install scripts to support CachyOS..."
 
 # Navigate to Omarchy install scripts
-cd ../omarchy
+cd "$OMARCHY_WORK_DIR"
 
 # Remove tldr installation to prevent conflict with tealdeer install.
 sed -i '/tldr/d' install/omarchy-base.packages
@@ -102,7 +109,7 @@ sed -i '/linux-cachyos/ ! s/pacman -Q linux/pacman -Q linux-cachyos/' bin/omarch
 sed -i '/run_logged \$OMARCHY_INSTALL\/preflight\/pacman\.sh/d' install/preflight/all.sh
 
 # Replace nvidia.sh with custom CachyOS 580xx Driver Logic
-cp ../bin/nvidia.sh install/config/hardware/nvidia.sh
+cp "$SCRIPT_DIR/nvidia.sh" install/config/hardware/nvidia.sh
 chmod +x install/config/hardware/nvidia.sh
 
 # Fix omarchy-ai-skill.sh symlink to be idempotent on re-runs
@@ -155,9 +162,9 @@ fi\
 sed -i 's/omarchy-cmd-present mise && eval "\$(mise activate bash)"/if [ "\$SHELL" = "\/bin\/bash" ] \&\& command -v mise \&> \/dev\/null; then\n  eval "\$(mise activate bash)"\nelif [ "\$SHELL" = "\/bin\/fish" ] \&\& command -v mise \&> \/dev\/null; then\n  mise activate fish | source\nfi/' config/uwsm/env
 
 # Copy omarchy installation files to ~/.local/share/omarchy
-mkdir -p ~/.local/share/omarchy
-cp -r . ~/.local/share/omarchy
-cd ~/.local/share/omarchy
+mkdir -p "$OMARCHY_INSTALL_DIR"
+cp -r . "$OMARCHY_INSTALL_DIR"
+cd "$OMARCHY_INSTALL_DIR"
 
 # Pause and prompt for acknowledgment to begin installation
 echo ""
