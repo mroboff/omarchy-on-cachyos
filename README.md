@@ -90,7 +90,7 @@ Other configuration changes are up to you. Note, however, that this script has n
 
 ```bash
 # Clone the repository
-git clone https://github.com/mroboff/omarchy-on-cachyos.git
+git clone https://github.com/jeanmartins7/omarchy-on-cachyos.git
 
 # Navigate to the project directory
 cd omarchy-on-cachyos/bin

@@ -96,12 +96,14 @@ sed -i '/tldr/d' install/omarchy-base.packages
 # Remove pacman.sh from preflight/all.sh to prevent conflict with cachyos packages
 sed -i '/run_logged \$OMARCHY_INSTALL\/preflight\/pacman\.sh/d' install/preflight/all.sh
 
-# Replace nvidia.sh with custom CachyOS 580xx Driver Logic
+# Replace nvidia.sh with custom CachyOS Driver Logic (Preserves existing drivers)
 cp ../bin/nvidia.sh install/config/hardware/nvidia.sh
 chmod +x install/config/hardware/nvidia.sh
 
-# Fix omarchy-ai-skill.sh symlink to be idempotent on re-runs
-sed -i 's/ln -s/ln -sf/' install/config/omarchy-ai-skill.sh
+# Prevent Omarchy from installing Intel video acceleration and Vulkan drivers
+echo "Removing Intel/Vulkan driver installation scripts to preserve CachyOS defaults..."
+rm -f install/config/hardware/intel/video-acceleration.sh
+rm -f install/config/hardware/vulkan.sh
 
 # Remove plymouth.sh source line from install.sh
 sed -i '/run_logged \$OMARCHY_INSTALL\/login\/plymouth\.sh/d' install/login/all.sh
@@ -157,12 +159,11 @@ echo "The following adjustments have been completed."
 echo " 1. Added Omarchy repo to pacman.conf"
 echo " 2. Removed tldr from packages.sh to avoid conflict with tealdeer on CachyOS."
 echo " 3. Disabled further Omarchy changes to pacman.conf, preserving CachyOS settings."
-echo " 4. Replaced nvidia.sh to respect existing CachyOS NVIDIA drivers (only installs if none present)."
-echo " 5. Removed plymouth.sh from install.sh to avoid conflict with CachyOS login display manager installation."
-echo " 6. Removed limine-snapper.sh from install.sh to avoid conflict with CachyOS boot loader installation."
-echo " 7. Removed /etc/sddm.conf to avoid conflict with Omarchy UWSM session autologin."
-echo " 9. Disabled wpa_supplicant and configured NetworkManager to use iwd backend."
-echo "10. Pinned walker to omarchy repo to prevent CachyOS version conflict."
+echo " 4. Replaced nvidia.sh with custom CachyOS Driver Logic (Preserves existing drivers)."
+echo " 5. Removed Intel/Vulkan video drivers installation to preserve CachyOS defaults."
+echo " 6. Removed plymouth.sh from install.sh to avoid conflict with CachyOS login display manager installation."
+echo " 7. Removed limine-snapper.sh from install.sh to avoid conflict with CachyOS boot loader installation."
+echo " 8. Removed /etc/sddm.conf to avoid conflict with Omarchy UWSM session autologin."
 echo "IMPORTANT: If you installed CachyOS without a deskop environment, you will not have a display manager installed." 
 echo "If this is the case, you will need to run the following command after this installation script is complete:"
 echo " 1.) ~/.local/share/omarchy/install/login/plymouth.sh"  
