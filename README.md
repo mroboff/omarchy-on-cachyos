@@ -1,5 +1,6 @@
 # omarchy-on-cachyos
 
+- UPDATE 19-Jun-2026: Added system detection, optional autologin, email validation, guard bypass for ext4 and existing desktop environments. KDE/GNOME coexistence now supported.
 - UPDATE 20-May-2026: The install script now includes interactive version selection for choosing between Stable releases and Bleeding Edge.
 - UPDATE 1-October-2025: The install script has been updated to support Omarchy 3.0+ out of the box.
 
@@ -49,11 +50,11 @@ The philosophy behind this script is to produce a strong and stable blend of Cac
 
 IMPORTANT: This script does not install CachyOS. You must do that separately (and first.) This script is intended to be run on a fresh installation of CachyOS with the following configuration choices made: (Note, for information on installing CachyOS, please refer to https://www.cachyos.org.) 
 
-1. File System: You must choose BTRFS as the file system and Snapper as the snapshot manager. This aligns with CachyOS's default recommendation for most systems, and is required for Omarchy to properly function.
+1. File System: BTRFS is **not required** when using this script. The snapshot/rollback feature (`limine-snapper`) that Omarchy uses btrfs for is automatically disabled. **ext4, btrfs, and other filesystems are all supported.** The script will detect your filesystem at runtime and inform you of what is being skipped and why.
 
 2. Shell: You must choose Fish as the default shell for this installation script to work properly. (This is the default CachyOS shell choice.)
 
-3. Desktop Environment to Install: You can install a minimal system with no desktop environment or you can choose to install the CachyOS Hyprland Desktop Environment. If you have CachyOS install Hyprland, it will also install SDDM as the login display manager by default. Do not install GNOME or KDE.
+3. Desktop Environment to Install: You can install a minimal system with no desktop environment, the CachyOS Hyprland desktop, KDE Plasma, or GNOME. **KDE and GNOME are now supported** — Omarchy will install alongside your existing desktop and appear as a selectable session at login. You do not need to uninstall your current desktop environment.
 
 4. Graphics Drivers for NVIDIA users: 
 
@@ -110,6 +111,38 @@ chmod +x install-omarchy-on-cachyos.sh
 THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Use this script at your own risk. Always backup your system and important data before running installation scripts.
+
+## 7. CachyOS Compatibility Notes
+
+The following changes are made automatically by this script to resolve conflicts between CachyOS and Omarchy's default assumptions. The script will print a summary of what was detected and skipped on your specific system before the installation begins.
+
+| Issue | What the script does | Why |
+|---|---|---|
+| **Btrfs required** | Bypasses the guard; disables `limine-snapper` | CachyOS may use ext4 or other filesystems. Snapshot support is not required to use Omarchy. |
+| **KDE/GNOME detected** | Bypasses the guard; installs Omarchy as an additional session | Omarchy coexists with your existing desktop — you pick your session at login. |
+| **Autologin** | Asks you at install time: opt-in or opt-out | If you have KDE or another desktop, you likely want to choose your session at login rather than be auto-logged into Omarchy. |
+| **SDDM config conflict** | Removes `/etc/sddm.conf` if present | CachyOS's SDDM config conflicts with Omarchy's UWSM session autologin setup. |
+| **`tldr` conflict** | Removes `tldr` from Omarchy's package list | CachyOS ships Tealdeer (`tldr`), a Rust-based TLDR implementation. Installing both causes a conflict. |
+| **`wpa_supplicant` conflict** | Disables `wpa_supplicant`; sets NetworkManager to use `iwd` | CachyOS enables `wpa_supplicant` by default, which conflicts with Omarchy's `iwd`, causing WiFi to appear connected but have no IP. |
+| **`walker` version conflict** | Pins `walker` to the Omarchy repo via `IgnorePkg` | CachyOS ships a newer version of `walker` that is incompatible with Omarchy's `elephant` launcher. |
+| **pacman.conf changes** | Skips Omarchy's `pacman.sh` preflight and post-install | Omarchy's `pacman.sh` overwrites CachyOS-specific pacman settings. |
+| **Plymouth/bootloader** | Skips `plymouth.sh`, `limine-snapper.sh`, `alt-bootloaders.sh` | CachyOS manages its own bootloader. These scripts assume a fresh Arch install and would conflict with CachyOS's boot configuration. |
+| **NVIDIA drivers** | Only installs if no driver is already present | CachyOS may already have the correct NVIDIA driver installed. The script checks before acting. |
+
+### What `plymouth.sh` does (and when to run it manually)
+
+`plymouth.sh` sets the Omarchy boot splash theme. It is **skipped automatically** during install because:
+- If you have **KDE or GNOME**, your display manager already handles login — no action needed.
+- If you have **multi-boot** (e.g. a Windows partition), your bootloader and boot menu are unaffected. Plymouth only changes the splash animation on the Linux side.
+
+If you installed CachyOS **without any desktop environment** and want the Omarchy splash, run it manually after the install:
+```bash
+~/.local/share/omarchy/install/login/plymouth.sh
+```
+
+### Stable vs. Bleeding Edge
+
+The install script will ask you which version of Omarchy to install. For CachyOS users, **Stable (latest tag) is recommended**. The compatibility patches in this script are written against the current stable release. Bleeding edge may change install paths or script logic in ways that break the patches mid-install.
 
 ## 7. How to Contribute
 
