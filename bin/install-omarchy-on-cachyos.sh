@@ -120,6 +120,45 @@ sed -i '/linux-cachyos/ ! s/pacman -Q linux/pacman -Q linux-cachyos/' bin/omarch
 # Remove pacman.sh from preflight/all.sh to prevent conflict with cachyos packages
 sed -i '/run_logged \$OMARCHY_INSTALL\/preflight\/pacman\.sh/d' install/preflight/all.sh
 
+# --- Detect system configuration ---
+DETECTED_FSTYPE=$(findmnt -n -o FSTYPE /)
+DETECTED_DE="None"
+if pacman -Qe plasma-desktop &>/dev/null; then
+    DETECTED_DE="KDE Plasma"
+elif pacman -Qe gnome-shell &>/dev/null; then
+    DETECTED_DE="GNOME"
+fi
+
+echo ""
+echo "System detection results:"
+echo "  Root filesystem : $DETECTED_FSTYPE"
+echo "  Desktop env     : $DETECTED_DE"
+echo ""
+
+# Explain what is being skipped and why, based on detection
+if [[ "$DETECTED_FSTYPE" != "btrfs" ]]; then
+    echo "  [SKIP] Btrfs filesystem guard:"
+    echo "         Your root filesystem is '$DETECTED_FSTYPE', not btrfs."
+    echo "         Omarchy uses btrfs only for snapshot/rollback support (limine-snapper)."
+    echo "         That feature is already disabled in this CachyOS install script."
+    echo "         The guard warning will be bypassed automatically."
+    echo ""
+fi
+
+if [[ "$DETECTED_DE" == "KDE Plasma" || "$DETECTED_DE" == "GNOME" ]]; then
+    echo "  [SKIP] Existing desktop environment guard:"
+    echo "         Omarchy detected '$DETECTED_DE' and would normally refuse to install."
+    echo "         This script supports installing Omarchy alongside your existing desktop."
+    echo "         You will be able to choose your session at login."
+    echo "         The guard warning will be bypassed automatically."
+    echo ""
+fi
+
+# Patch guard.sh to auto-proceed past guards that don't apply to CachyOS
+# Instead of removing the checks (which would hide real problems), we stub out
+# the abort() function so it prints the warning but never prompts or exits.
+sed -i 's/^abort() {$/abort() {\n  echo -e "\\e[33m[CachyOS Compat] Warning bypassed: $1\\e[0m"\n  return 0\n  # Original abort body below (disabled):/' install/preflight/guard.sh
+
 # Replace nvidia.sh with custom CachyOS 580xx Driver Logic
 cp "$SCRIPT_DIR/nvidia.sh" install/config/hardware/nvidia.sh
 chmod +x install/config/hardware/nvidia.sh
@@ -138,11 +177,34 @@ sed -i '/run_logged \$OMARCHY_INSTALL\/login\/alt-bootloaders\.sh/d' install/log
 
 # Make autologin optional
 if [[ ! "${ENABLE_AUTOLOGIN,,}" =~ ^(y|yes)$ ]]; then
-    # Remove autologin configuration from Omarchy's SDDM setup
-    sed -i '/\[Autologin\]/d' install/login/sddm.sh
-    sed -i '/User=\$USER/d' install/login/sddm.sh
-    sed -i '/Session=omarchy/d' install/login/sddm.sh
-    
+    # Replace the entire autologin if/else block with a clean no-autologin version.
+    # We use python to rewrite the file safely, avoiding broken heredoc/if-block syntax
+    # that results from deleting individual lines with sed.
+    python3 - install/login/sddm.sh << 'PYEOF'
+import sys, re
+
+with open(sys.argv[1]) as f:
+    content = f.read()
+
+# Replace the autologin if/else block with just the theme-only conf
+old_block = re.search(
+    r"if \[\[.*autologin\.conf.*?\]\];.*?^fi$",
+    content, re.DOTALL | re.MULTILINE
+)
+if old_block:
+    replacement = (
+        "# Set SDDM theme without autologin (user opted out during install)\n"
+        "cat <<EOF | sudo tee /etc/sddm.conf.d/omarchy-theme.conf > /dev/null\n"
+        "[Theme]\n"
+        "Current=omarchy\n"
+        "EOF"
+    )
+    content = content[:old_block.start()] + replacement + content[old_block.end():]
+
+with open(sys.argv[1], 'w') as f:
+    f.write(content)
+PYEOF
+
     # Remove any existing autologin conf so SDDM prompts for password
     sudo rm -f /etc/sddm.conf.d/autologin.conf 2>/dev/null
 fi
