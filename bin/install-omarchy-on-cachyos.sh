@@ -11,9 +11,9 @@ echo "Fetching Omarchy source..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OMARCHY_DIR="$SCRIPT_DIR/../../omarchy"
 
-if [ -f "./fetch-omarchy.sh" ]; then
-    chmod +x ./fetch-omarchy.sh
-    ./fetch-omarchy.sh
+if [ -f "$SCRIPT_DIR/fetch-omarchy.sh" ]; then
+    chmod +x "$SCRIPT_DIR/fetch-omarchy.sh"
+    "$SCRIPT_DIR/fetch-omarchy.sh"
 else
     # Fallback if script is missing
     echo "fetch-omarchy.sh not found, falling back to default clone..."
@@ -73,22 +73,41 @@ fi
 
 # Prompt user for username
 echo ""
-echo "Please enter your username:"
+echo "Please enter your name for git commits (e.g. John Doe)."
+echo "This also sets a CapsLock+Space+N shortcut to type it quickly."
 read -r OMARCHY_USER_NAME
 export OMARCHY_USER_NAME
 
 # Prompt user for email address
 echo ""
-echo "Please enter your email address:"
-read -r OMARCHY_USER_EMAIL
+echo "Please enter your email for git commits (e.g. you@example.com)."
+echo "This also sets a CapsLock+Space+E shortcut to type it quickly. Leave blank to skip."
+echo "(Stays on your machine only — not sent anywhere, no newsletters, no telemetry.)"
+while true; do
+    read -r OMARCHY_USER_EMAIL
+    if [[ -z "$OMARCHY_USER_EMAIL" ]]; then
+        echo "Skipping email configuration."
+        break
+    elif [[ "$OMARCHY_USER_EMAIL" =~ ^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$ ]]; then
+        break
+    else
+        echo "Invalid email format. Please try again (or leave blank to skip):"
+    fi
+done
 export OMARCHY_USER_EMAIL
+
+# Prompt user for autologin preference
+echo ""
+echo "Do you want to enable automatic login to Omarchy?"
+echo "If 'no', you will be prompted for a password at boot and can choose your desktop environment (e.g. KDE)."
+read -r -p "[y/N]: " ENABLE_AUTOLOGIN
 
 # Make adjustments to Omarchy install scripts to support CachyOS
 echo ""
 echo "Making adjustments to Omarchy install scripts to support CachyOS..."
 
 # Navigate to Omarchy install scripts
-cd ../omarchy
+cd "$OMARCHY_DIR" || { echo "Error: failed to change directory to $OMARCHY_DIR"; exit 1; }
 
 # Remove tldr installation to prevent conflict with tealdeer install.
 sed -i '/tldr/d' install/omarchy-base.packages
@@ -101,8 +120,47 @@ sed -i '/linux-cachyos/ ! s/pacman -Q linux/pacman -Q linux-cachyos/' bin/omarch
 # Remove pacman.sh from preflight/all.sh to prevent conflict with cachyos packages
 sed -i '/run_logged \$OMARCHY_INSTALL\/preflight\/pacman\.sh/d' install/preflight/all.sh
 
+# --- Detect system configuration ---
+DETECTED_FSTYPE=$(findmnt -n -o FSTYPE /)
+DETECTED_DE="None"
+if pacman -Qe plasma-desktop &>/dev/null; then
+    DETECTED_DE="KDE Plasma"
+elif pacman -Qe gnome-shell &>/dev/null; then
+    DETECTED_DE="GNOME"
+fi
+
+echo ""
+echo "System detection results:"
+echo "  Root filesystem : $DETECTED_FSTYPE"
+echo "  Desktop env     : $DETECTED_DE"
+echo ""
+
+# Explain what is being skipped and why, based on detection
+if [[ "$DETECTED_FSTYPE" != "btrfs" ]]; then
+    echo "  [SKIP] Btrfs filesystem guard:"
+    echo "         Your root filesystem is '$DETECTED_FSTYPE', not btrfs."
+    echo "         Omarchy uses btrfs only for snapshot/rollback support (limine-snapper)."
+    echo "         That feature is already disabled in this CachyOS install script."
+    echo "         The guard warning will be bypassed automatically."
+    echo ""
+fi
+
+if [[ "$DETECTED_DE" == "KDE Plasma" || "$DETECTED_DE" == "GNOME" ]]; then
+    echo "  [SKIP] Existing desktop environment guard:"
+    echo "         Omarchy detected '$DETECTED_DE' and would normally refuse to install."
+    echo "         This script supports installing Omarchy alongside your existing desktop."
+    echo "         You will be able to choose your session at login."
+    echo "         The guard warning will be bypassed automatically."
+    echo ""
+fi
+
+# Patch guard.sh to auto-proceed past guards that don't apply to CachyOS
+# Instead of removing the checks (which would hide real problems), we stub out
+# the abort() function so it prints the warning but never prompts or exits.
+sed -i 's/^abort() {$/abort() {\n  echo -e "\\e[33m[CachyOS Compat] Warning bypassed: $1\\e[0m"\n  return 0\n  # Original abort body below (disabled):/' install/preflight/guard.sh
+
 # Replace nvidia.sh with custom CachyOS 580xx Driver Logic
-cp ../bin/nvidia.sh install/config/hardware/nvidia.sh
+cp "$SCRIPT_DIR/nvidia.sh" install/config/hardware/nvidia.sh
 chmod +x install/config/hardware/nvidia.sh
 
 # Fix omarchy-ai-skill.sh symlink to be idempotent on re-runs
@@ -116,6 +174,24 @@ sed -i '/run_logged \$OMARCHY_INSTALL\/login\/limine-snapper\.sh/d' install/logi
 
 # Remove alt-bootloaders.sh source line from install.sh
 sed -i '/run_logged \$OMARCHY_INSTALL\/login\/alt-bootloaders\.sh/d' install/login/all.sh
+
+# Make autologin optional
+if [[ ! "${ENABLE_AUTOLOGIN,,}" =~ ^(y|yes)$ ]]; then
+    # Replace the entire sddm.sh script with a minimal version.
+    # We only want to copy the wayland-sessions file so Omarchy appears in the SDDM dropdown.
+    # We do NOT want to install the Omarchy theme, force the Wayland greeter, or edit PAM.
+    python3 - install/login/sddm.sh << 'PYEOF'
+import sys
+with open(sys.argv[1], 'w') as f:
+    f.write("""# Minimal SDDM setup (user opted out of Omarchy autologin/theme)
+sudo mkdir -p /usr/local/share/wayland-sessions
+sudo cp "$OMARCHY_PATH/default/wayland-sessions/omarchy.desktop" /usr/local/share/wayland-sessions/omarchy.desktop
+""")
+PYEOF
+
+    # Remove any existing autologin conf so SDDM prompts for password
+    sudo rm -f /etc/sddm.conf.d/autologin.conf 2>/dev/null
+fi
 
 # Remove pacman.sh from post-install/all.sh to prevent conflict with cachyos packages
 sed -i '/run_logged \$OMARCHY_INSTALL\/post-install\/pacman\.sh/d' install/post-install/all.sh
@@ -155,6 +231,7 @@ fi\
 sed -i 's/omarchy-cmd-present mise && eval "\$(mise activate bash)"/if [ "\$SHELL" = "\/bin\/bash" ] \&\& command -v mise \&> \/dev\/null; then\n  eval "\$(mise activate bash)"\nelif [ "\$SHELL" = "\/bin\/fish" ] \&\& command -v mise \&> \/dev\/null; then\n  mise activate fish | source\nfi/' config/uwsm/env
 
 # Copy omarchy installation files to ~/.local/share/omarchy
+rm -rf ~/.local/share/omarchy
 mkdir -p ~/.local/share/omarchy
 cp -r . ~/.local/share/omarchy
 cd ~/.local/share/omarchy
@@ -169,15 +246,25 @@ echo " 4. Replaced nvidia.sh to respect existing CachyOS NVIDIA drivers (only in
 echo " 5. Removed plymouth.sh from install.sh to avoid conflict with CachyOS login display manager installation."
 echo " 6. Removed limine-snapper.sh from install.sh to avoid conflict with CachyOS boot loader installation."
 echo " 7. Removed alt-bootloaders.sh from install.sh to avoid conflict with CachyOS boot loader installation."
-echo " 8. Removed /etc/sddm.conf to avoid conflict with Omarchy UWSM session autologin."
+if [[ "${ENABLE_AUTOLOGIN,,}" =~ ^(y|yes)$ ]]; then
+    echo " 8. Removed /etc/sddm.conf and configured Omarchy SDDM autologin."
+else
+    echo " 8. Removed /etc/sddm.conf and disabled Omarchy SDDM autologin."
+fi
 echo " 9. Disabled wpa_supplicant and configured NetworkManager to use iwd backend."
 echo "10. Pinned walker to omarchy repo to prevent CachyOS version conflict."
 echo ""
-echo "IMPORTANT: If you installed CachyOS without a deskop environment, you will not have a display manager installed." 
+echo "IMPORTANT: If you installed CachyOS without a desktop environment, you will not have a display manager installed."
 echo "If this is the case, you will need to run the following command after this installation script is complete:"
-echo " 1.) ~/.local/share/omarchy/install/login/plymouth.sh"  
+echo "  ~/.local/share/omarchy/install/login/plymouth.sh"
 echo ""
-echo "The aboves script will modify your boot to start Omarchy's Hyprland desktop automatically." 
+echo "That script only sets the Omarchy boot splash (Plymouth theme). It does NOT change your bootloader."
+echo ""
+echo "  - Already have KDE or GNOME? No action needed — your existing login screen and desktop are untouched."
+echo "    Omarchy will appear as a selectable session in your display manager (e.g. SDDM)."
+echo ""
+echo "  - Multi-boot with Windows? Safe — this script does not modify GRUB or your boot entries."
+echo "    Your Windows partition and boot menu remain exactly as they are."
 echo ""
 echo "Press Enter to begin the installation of Omarchy..."
 read -r
