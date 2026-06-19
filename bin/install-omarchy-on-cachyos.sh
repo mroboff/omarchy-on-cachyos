@@ -177,32 +177,16 @@ sed -i '/run_logged \$OMARCHY_INSTALL\/login\/alt-bootloaders\.sh/d' install/log
 
 # Make autologin optional
 if [[ ! "${ENABLE_AUTOLOGIN,,}" =~ ^(y|yes)$ ]]; then
-    # Replace the entire autologin if/else block with a clean no-autologin version.
-    # We use python to rewrite the file safely, avoiding broken heredoc/if-block syntax
-    # that results from deleting individual lines with sed.
+    # Replace the entire sddm.sh script with a minimal version.
+    # We only want to copy the wayland-sessions file so Omarchy appears in the SDDM dropdown.
+    # We do NOT want to install the Omarchy theme, force the Wayland greeter, or edit PAM.
     python3 - install/login/sddm.sh << 'PYEOF'
-import sys, re
-
-with open(sys.argv[1]) as f:
-    content = f.read()
-
-# Replace the autologin if/else block with just the theme-only conf
-old_block = re.search(
-    r"if \[\[.*autologin\.conf.*?\]\];.*?^fi$",
-    content, re.DOTALL | re.MULTILINE
-)
-if old_block:
-    replacement = (
-        "# Set SDDM theme without autologin (user opted out during install)\n"
-        "cat <<EOF | sudo tee /etc/sddm.conf.d/omarchy-theme.conf > /dev/null\n"
-        "[Theme]\n"
-        "Current=omarchy\n"
-        "EOF"
-    )
-    content = content[:old_block.start()] + replacement + content[old_block.end():]
-
+import sys
 with open(sys.argv[1], 'w') as f:
-    f.write(content)
+    f.write("""# Minimal SDDM setup (user opted out of Omarchy autologin/theme)
+sudo mkdir -p /usr/local/share/wayland-sessions
+sudo cp "$OMARCHY_PATH/default/wayland-sessions/omarchy.desktop" /usr/local/share/wayland-sessions/omarchy.desktop
+""")
 PYEOF
 
     # Remove any existing autologin conf so SDDM prompts for password
