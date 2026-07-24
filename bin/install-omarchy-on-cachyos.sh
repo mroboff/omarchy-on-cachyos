@@ -154,6 +154,12 @@ fi\
 # Update mise activation to support both bash and fish
 sed -i 's/omarchy-cmd-present mise && eval "\$(mise activate bash)"/if [ "\$SHELL" = "\/bin\/bash" ] \&\& command -v mise \&> \/dev\/null; then\n  eval "\$(mise activate bash)"\nelif [ "\$SHELL" = "\/bin\/fish" ] \&\& command -v mise \&> \/dev\/null; then\n  mise activate fish | source\nfi/' config/uwsm/env
 
+# Add zoxide initialization for fish shell
+mkdir -p ~/.config/fish/conf.d
+if ! grep -q "zoxide init fish" ~/.config/fish/conf.d/zoxide.fish 2>/dev/null; then
+  echo 'if command -v zoxide &> /dev/null; zoxide init fish | source; end' > ~/.config/fish/conf.d/zoxide.fish
+fi
+
 # Copy omarchy installation files to ~/.local/share/omarchy
 mkdir -p ~/.local/share/omarchy
 cp -r . ~/.local/share/omarchy
@@ -172,6 +178,7 @@ echo " 7. Removed alt-bootloaders.sh from install.sh to avoid conflict with Cach
 echo " 8. Removed /etc/sddm.conf to avoid conflict with Omarchy UWSM session autologin."
 echo " 9. Disabled wpa_supplicant and configured NetworkManager to use iwd backend."
 echo "10. Pinned walker to omarchy repo to prevent CachyOS version conflict."
+echo "11. Configured zoxide initialization for Fish shell."
 echo ""
 echo "IMPORTANT: If you installed CachyOS without a deskop environment, you will not have a display manager installed." 
 echo "If this is the case, you will need to run the following command after this installation script is complete:"
