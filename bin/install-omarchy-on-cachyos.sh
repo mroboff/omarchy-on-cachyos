@@ -88,7 +88,7 @@ echo ""
 echo "Making adjustments to Omarchy install scripts to support CachyOS..."
 
 # Navigate to Omarchy install scripts
-cd ../omarchy
+cd "$OMARCHY_DIR"
 
 # Remove tldr installation to prevent conflict with tealdeer install.
 sed -i '/tldr/d' install/omarchy-base.packages
