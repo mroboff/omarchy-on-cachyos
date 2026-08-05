@@ -11,9 +11,9 @@ echo "Fetching Omarchy source..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OMARCHY_DIR="$SCRIPT_DIR/../../omarchy"
 
-if [ -f "./fetch-omarchy.sh" ]; then
-    chmod +x ./fetch-omarchy.sh
-    ./fetch-omarchy.sh
+if [ -f "$SCRIPT_DIR/fetch-omarchy.sh" ]; then
+    chmod +x "$SCRIPT_DIR/fetch-omarchy.sh"
+    "$SCRIPT_DIR/fetch-omarchy.sh"
 else
     # Fallback if script is missing
     echo "fetch-omarchy.sh not found, falling back to default clone..."
@@ -71,6 +71,26 @@ if [ -f /etc/sddm.conf ]; then
     sudo rm /etc/sddm.conf
 fi
 
+# Replace CachyOS's fish login shell with bash.
+# Omarchy writes ~/.bashrc and ships its own aliases, functions, completions,
+# prompt, and mise activation under default/bash/, but it never runs chsh
+# itself. With fish as the login shell none of that is ever sourced, so the
+# user gets Omarchy's shell config installed but never loaded.
+LOGIN_USER="$(id -un)"
+CURRENT_SHELL="$(getent passwd "$LOGIN_USER" | cut -d: -f7)"
+if [ "$CURRENT_SHELL" != "/bin/bash" ]; then
+    echo ""
+    echo "Changing login shell for $LOGIN_USER from $CURRENT_SHELL to /bin/bash..."
+    if sudo chsh -s /bin/bash "$LOGIN_USER"; then
+        echo "Login shell is now bash. Fish stays installed - run 'fish' to use it."
+    else
+        echo "Warning: could not change the login shell."
+        echo "Run 'chsh -s /bin/bash' yourself after this script finishes."
+    fi
+else
+    echo "Login shell is already bash."
+fi
+
 # Prompt user for username
 echo ""
 echo "Please enter your username:"
@@ -88,7 +108,10 @@ echo ""
 echo "Making adjustments to Omarchy install scripts to support CachyOS..."
 
 # Navigate to Omarchy install scripts
-cd ../omarchy
+cd "$OMARCHY_DIR" || {
+    echo "Error: Could not enter Omarchy source directory at $OMARCHY_DIR"
+    exit 1
+}
 
 # Remove tldr installation to prevent conflict with tealdeer install.
 sed -i '/tldr/d' install/omarchy-base.packages
@@ -102,7 +125,7 @@ sed -i '/linux-cachyos/ ! s/pacman -Q linux/pacman -Q linux-cachyos/' bin/omarch
 sed -i '/run_logged \$OMARCHY_INSTALL\/preflight\/pacman\.sh/d' install/preflight/all.sh
 
 # Replace nvidia.sh with custom CachyOS 580xx Driver Logic
-cp ../bin/nvidia.sh install/config/hardware/nvidia.sh
+cp "$SCRIPT_DIR/nvidia.sh" install/config/hardware/nvidia.sh
 chmod +x install/config/hardware/nvidia.sh
 
 # Fix omarchy-ai-skill.sh symlink to be idempotent on re-runs
@@ -151,8 +174,10 @@ if ! grep -q "^IgnorePkg.*walker" /etc/pacman.conf 2>/dev/null; then\
 fi\
 ' install/config/walker-elephant.sh
 
-# Update mise activation to support both bash and fish
-sed -i 's/omarchy-cmd-present mise && eval "\$(mise activate bash)"/if [ "\$SHELL" = "\/bin\/bash" ] \&\& command -v mise \&> \/dev\/null; then\n  eval "\$(mise activate bash)"\nelif [ "\$SHELL" = "\/bin\/fish" ] \&\& command -v mise \&> \/dev\/null; then\n  mise activate fish | source\nfi/' config/uwsm/env
+# No mise patch is needed. Omarchy's config/uwsm/env activates mise with
+# --shims, which exports a PATH entry that every process in the session
+# inherits, and default/bash/init activates it for interactive bash. With bash
+# as the login shell both paths are covered by Omarchy itself.
 
 # Copy omarchy installation files to ~/.local/share/omarchy
 mkdir -p ~/.local/share/omarchy
@@ -172,12 +197,18 @@ echo " 7. Removed alt-bootloaders.sh from install.sh to avoid conflict with Cach
 echo " 8. Removed /etc/sddm.conf to avoid conflict with Omarchy UWSM session autologin."
 echo " 9. Disabled wpa_supplicant and configured NetworkManager to use iwd backend."
 echo "10. Pinned walker to omarchy repo to prevent CachyOS version conflict."
+echo "11. Switched the login shell from fish to bash so Omarchy's shell config is loaded."
 echo ""
-echo "IMPORTANT: If you installed CachyOS without a deskop environment, you will not have a display manager installed." 
-echo "If this is the case, you will need to run the following command after this installation script is complete:"
-echo " 1.) ~/.local/share/omarchy/install/login/plymouth.sh"  
+echo "NOTE: If you installed CachyOS without a desktop environment, you do not need"
+echo "to do anything extra. SDDM is part of Omarchy's base package set, and Omarchy's"
+echo "install/login/sddm.sh sets up the Omarchy session, enables sddm.service, and"
+echo "configures autologin for your user, so the desktop starts on the next boot."
 echo ""
-echo "The aboves script will modify your boot to start Omarchy's Hyprland desktop automatically." 
+echo "The Omarchy boot splash (plymouth) is intentionally skipped so it does not"
+echo "conflict with the CachyOS boot setup. To enable it anyway, run:"
+echo " 1.) ~/.local/share/omarchy/install/login/plymouth.sh"
+echo ""
+echo "That only sets the boot splash theme. It does not affect how the desktop starts."
 echo ""
 echo "Press Enter to begin the installation of Omarchy..."
 read -r

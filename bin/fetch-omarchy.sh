@@ -12,7 +12,7 @@ RELEASES=($(git ls-remote --tags --refs $REPO_URL 2>/dev/null | awk -F/ '{print 
 echo "-----------------------------------------------"
 echo "Select the Omarchy version you want to install:"
 echo "-----------------------------------------------"
-echo "1) Bleeding Edge (dev/main branch - Unstable)"
+echo "1) Bleeding Edge (master branch - Unstable)"
 
 # Dynamically list the stable versions fetched from the repository
 for i in "${!RELEASES[@]}"; do
@@ -23,8 +23,8 @@ read -r -p "Enter your choice (1-$(( ${#RELEASES[@]} + 1 ))): " CHOICE
 
 # Formulate arguments based on selection
 if [ "$CHOICE" -eq 1 ] || [ -z "$CHOICE" ]; then
-    BRANCH_ARGS=""
-    echo "Cloning bleeding-edge dev tree..."
+    BRANCH_ARGS="-b master"
+    echo "Cloning bleeding-edge master tree..."
 else
     SELECTED_TAG="${RELEASES[$((CHOICE-2))]}"
     BRANCH_ARGS="--depth 1 -b $SELECTED_TAG"

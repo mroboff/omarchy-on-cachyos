@@ -21,9 +21,15 @@ This script does not:
  1) Install CachyOS or any other Linux operating system
  2) Partition, format, or encrypt hard disks
  3) Install or configure a boot loader
- 5) Install or configure a login display manager
 
 All of the above need to be done when you install CachyOS. 
+
+Note that Omarchy itself does install and configure SDDM as the login display
+manager: `sddm` is part of `install/omarchy-base.packages`, and Omarchy's
+`install/login/sddm.sh` installs the Omarchy SDDM theme, registers the Omarchy
+Wayland session, configures autologin for your user, and enables
+`sddm.service`. This happens whether or not CachyOS installed a display manager
+for you. 
 
 ## 3. Important Notes
 
@@ -33,13 +39,13 @@ The philosophy behind this script is to produce a strong and stable blend of Cac
 
 1. AUR helper: CachyOS uses Paru by default while Omarchy uses Yay. This script opts for Yay and will install it if not already installed.
 
-2. Shell: CachyOS uses the Fish shell by default while Omarchy uses Bash. This script will keep Fish as the default interactive shell.
+2. Shell: CachyOS uses the Fish shell by default while Omarchy uses Bash. This script switches the login shell to Bash. Omarchy writes `~/.bashrc` and ships its own aliases, functions, completions, prompt, and mise activation under `default/bash/`, but it never changes your shell itself — under Fish all of that is installed and never loaded. Fish remains installed; run `fish` to use it.
 
 3. TLDR implementation: CachyOS installs Tealdeer by default, which is a TLDR implementation written in Rust. This script will preserve use of Tealdeer.
 
-4. Mise: Omarchy will setup Mise to run automatically via mise-activate. This script will supply the right mise-activate command for the fish shell.
+4. Mise: Omarchy sets up Mise automatically and this script no longer patches it. Omarchy's `config/uwsm/env` activates Mise with `--shims`, which exports a PATH entry inherited by every process in the session, and `default/bash/init` activates it for interactive Bash.
 
-5. Login System: As a distribution, Omarchy skips installation of a login display manager. Instead, Hyprland autostarts and password protection is provided upon boot by the LUKS full disk encryption service. This script, however, assumes a display manager is installed. (Note: this script does not install a display manager, but also does not configure Hyprland to start automatically if a display manager is not installed.)
+5. Login System: Omarchy installs SDDM as part of its base package set and configures it through `install/login/sddm.sh` (Omarchy theme, Omarchy Wayland session, autologin for your user, `systemctl enable sddm.service`). This script keeps that step, so the desktop starts automatically on the next boot even if you installed CachyOS with no desktop environment. If CachyOS already installed its own SDDM, this script removes `/etc/sddm.conf` first so the CachyOS config does not conflict with Omarchy's session and autologin settings.
 
 6. Full Disk Encryption: As a distribution, Omarchy automatically turns on full disk encryption via LUKS. This script, however, leaves this decision up to the user. CachyOS can be installed with or without full disk encryption, and this script will install Omarchy on either setup.
 
@@ -51,7 +57,7 @@ IMPORTANT: This script does not install CachyOS. You must do that separately (an
 
 1. File System: You must choose BTRFS as the file system and Snapper as the snapshot manager. This aligns with CachyOS's default recommendation for most systems, and is required for Omarchy to properly function.
 
-2. Shell: You must choose Fish as the default shell for this installation script to work properly. (This is the default CachyOS shell choice.)
+2. Shell: Either Fish (the CachyOS default) or Bash works. The script switches the login shell to Bash during installation.
 
 3. Desktop Environment to Install: You can install a minimal system with no desktop environment or you can choose to install the CachyOS Hyprland Desktop Environment. If you have CachyOS install Hyprland, it will also install SDDM as the login display manager by default. Do not install GNOME or KDE.
 
