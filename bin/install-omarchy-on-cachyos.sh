@@ -13,7 +13,10 @@ OMARCHY_DIR="$SCRIPT_DIR/../../omarchy"
 
 if [ -f "$SCRIPT_DIR/fetch-omarchy.sh" ]; then
     chmod +x "$SCRIPT_DIR/fetch-omarchy.sh"
-    "$SCRIPT_DIR/fetch-omarchy.sh"
+    if ! "$SCRIPT_DIR/fetch-omarchy.sh"; then
+        echo "Error: Fetching the Omarchy source failed. Aborting."
+        exit 1
+    fi
 else
     # Fallback if script is missing
     echo "fetch-omarchy.sh not found, falling back to default clone..."
