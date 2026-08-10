@@ -14,7 +14,7 @@ This installation script does the following three things:
   1) Prompts for and fetches your preferred version of Omarchy (Stable tags or Bleeding Edge)
   2) Makes adjustments to the Omarchy install scripts to support installation on CachyOS
   3) Launches the installation of Omarchy on an already setup CachyOS system
-  4) Installs and configures NVIDIA 580xx proprietary drivers
+  4) Detects and respects the NVIDIA driver already installed by CachyOS, and installs one via `chwd` only if none is present (e.g. minimal installs)
 
 This script does not:
 
@@ -43,7 +43,7 @@ The philosophy behind this script is to produce a strong and stable blend of Cac
 
 6. Full Disk Encryption: As a distribution, Omarchy automatically turns on full disk encryption via LUKS. This script, however, leaves this decision up to the user. CachyOS can be installed with or without full disk encryption, and this script will install Omarchy on either setup.
 
-7. NVIDIA Drivers: *By default, CachyOS and Omarchy may attempt to use the latest NVIDIA drivers with open kernel modules. This script explicitly downgrades/pins the driver to the* *580xx proprietary series* *using CachyOS's* `chwd` *tool. This is a deliberate choice to fix widespread issues with hardware acceleration, electron apps, and browser flickering.*
+7. NVIDIA Drivers: The script detects whatever NVIDIA driver CachyOS has already installed and respects it — it never downgrades or force-replaces existing drivers. If no NVIDIA driver is present (e.g. on a minimal CachyOS install), the script installs one via CachyOS's `chwd` tool (`chwd -a`). It also applies the NVIDIA environment variables needed for UWSM/Hyprland hardware acceleration, idempotently so the script is safe to re-run.
 
 ## 4. Pre-Requisites
 
@@ -57,7 +57,7 @@ IMPORTANT: This script does not install CachyOS. You must do that separately (an
 
 4. Graphics Drivers for NVIDIA users: 
 
-5. This script now automatically handles NVIDIA driver installation by enforcing the proprietary 580xx drivers (via CachyOS `chwd`). This is necessary to avoid known regressions with hardware video decoding and browser flickering present in the newer open-kernel module drivers.
+5. This script now automatically handles NVIDIA driver configuration. If CachyOS already has a working NVIDIA driver installed, the script detects and respects it. If no driver is present (e.g. a minimal CachyOS install), it installs one via CachyOS's `chwd` tool. The script never downgrades or force-replaces existing drivers.
 
    **Important:** 
 
