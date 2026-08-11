@@ -87,8 +87,12 @@ export OMARCHY_USER_EMAIL
 echo ""
 echo "Making adjustments to Omarchy install scripts to support CachyOS..."
 
-# Navigate to Omarchy install scripts
-cd ../omarchy
+# Navigate to Omarchy install scripts (same path fetch-omarchy.sh clones into)
+if [ ! -d "$OMARCHY_DIR" ]; then
+    echo "Error: Omarchy source not found at $OMARCHY_DIR"
+    exit 1
+fi
+cd "$OMARCHY_DIR"
 
 # Remove tldr installation to prevent conflict with tealdeer install.
 sed -i '/tldr/d' install/omarchy-base.packages
@@ -102,7 +106,7 @@ sed -i '/linux-cachyos/ ! s/pacman -Q linux/pacman -Q linux-cachyos/' bin/omarch
 sed -i '/run_logged \$OMARCHY_INSTALL\/preflight\/pacman\.sh/d' install/preflight/all.sh
 
 # Replace nvidia.sh with custom CachyOS 580xx Driver Logic
-cp ../bin/nvidia.sh install/config/hardware/nvidia.sh
+cp "$SCRIPT_DIR/nvidia.sh" install/config/hardware/nvidia.sh
 chmod +x install/config/hardware/nvidia.sh
 
 # Fix omarchy-ai-skill.sh symlink to be idempotent on re-runs
