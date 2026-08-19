@@ -19,6 +19,12 @@ REPO_URL="https://github.com/basecamp/omarchy"
 # -> upgrade in place to 4.x afterwards using Omarchy's own updater.
 OMARCHY_VERSION="v3.8.4"
 
+# Note: upstream forgot to bump the version file for this release. The tree at
+# tag v3.8.4 ships a `version` file containing "3.8.3" (v3.8.2 and v3.8.3 are
+# both correct, so this is specific to v3.8.4). The checkout really is v3.8.4 -
+# only the string is stale - so anything reading that file, including Omarchy's
+# own greeting, reports 3.8.3. That is upstream's to fix, not ours.
+
 # Report what is actually checked out in a directory, so a re-run shows the
 # user what they are about to delete and what they ended up with.
 describe_checkout() {
@@ -105,10 +111,20 @@ if [ -z "$REMOTE_TAG" ]; then
     exit 1
 fi
 
-# Execute clean, quiet checkout bypassing standard detached HEAD advice warnings
+# Execute clean, quiet checkout bypassing standard detached HEAD advice warnings.
+#
+# Deliberately NOT shallow. `--depth` implies `--single-branch`, which leaves
+# the clone with `remote.origin.fetch = +refs/tags/vX:refs/tags/vX` and no
+# remote-tracking branches at all. Omarchy's own tooling then breaks in two
+# ways: `omarchy-branch-set master` (reached via `omarchy-channel-set stable`)
+# runs `git switch master` and dies with "fatal: invalid reference: master",
+# and `omarchy-update` runs `git pull --autostash`, which reports "Already up
+# to date." forever instead of updating. Since the whole point of pinning 3.x
+# is to upgrade in place to 4.x afterwards, the clone has to carry the branches
+# that upgrade needs. A full clone keeps origin/master and every tag available.
 echo "Cloning stable version: $OMARCHY_VERSION..."
 echo "Cloning into $TARGET_DIR..."
-if ! git -c advice.detachedHead=false clone --quiet --depth 1 -b "$OMARCHY_VERSION" "$REPO_URL" "$TARGET_DIR"; then
+if ! git -c advice.detachedHead=false clone --quiet -b "$OMARCHY_VERSION" "$REPO_URL" "$TARGET_DIR"; then
     echo "Error: Failed to clone Omarchy repo."
     exit 1
 fi

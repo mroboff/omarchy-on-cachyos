@@ -339,9 +339,78 @@ require_text "$WALKER_PATCH" "$WALKER_FILE" "$WALKER_MARKER"
 # as the login shell both paths are covered by Omarchy itself.
 
 # Copy omarchy installation files to ~/.local/share/omarchy
-mkdir -p ~/.local/share/omarchy
-cp -r . ~/.local/share/omarchy
-cd ~/.local/share/omarchy
+OMARCHY_DEST="$HOME/.local/share/omarchy"
+PATCH_COMMIT_MSG="CachyOS compatibility patches"
+
+# Refuse to copy over an unrelated checkout. `cp -r .` merges into whatever is
+# already there rather than replacing it, and that includes .git: read-only
+# pack files fail to overwrite while the old refs and objects survive, so the
+# destination ends up neither the old tree nor the new one. A pre-existing
+# Omarchy on another branch or major version - a 4.x install tracking dev, say
+# - has to be moved aside deliberately, not half-overwritten here.
+if [ -d "$OMARCHY_DEST/.git" ]; then
+    DEST_HEAD="$(git -C "$OMARCHY_DEST" rev-parse HEAD 2>/dev/null || true)"
+    SRC_HEAD="$(git -C "$OMARCHY_DIR" rev-parse HEAD 2>/dev/null || true)"
+
+    # A previous run of this script leaves the patch commit sitting directly on
+    # top of the source commit, so the two HEADs legitimately differ. Recognise
+    # exactly that shape - our commit subject, parented to the source commit -
+    # and treat it as ours. Anything else is someone else's checkout. Matching
+    # on the parent matters: a 4.x install has the pinned tag in its history
+    # too, so an ancestry test alone would wave it through.
+    DEST_IS_OURS=false
+    if [ "$DEST_HEAD" = "$SRC_HEAD" ]; then
+        DEST_IS_OURS=true
+    elif [ "$(git -C "$OMARCHY_DEST" log -1 --format=%s 2>/dev/null || true)" = "$PATCH_COMMIT_MSG" ] &&
+        [ "$(git -C "$OMARCHY_DEST" rev-parse -q --verify 'HEAD^' 2>/dev/null || true)" = "$SRC_HEAD" ]; then
+        DEST_IS_OURS=true
+    fi
+
+    if [ "$DEST_IS_OURS" != "true" ]; then
+        DEST_DESC="$(git -C "$OMARCHY_DEST" describe --tags --exact-match 2>/dev/null || true)"
+        [ -n "$DEST_DESC" ] || DEST_DESC="$(git -C "$OMARCHY_DEST" symbolic-ref --short -q HEAD || true)"
+        [ -n "$DEST_DESC" ] || DEST_DESC="detached HEAD"
+        if [ -r "$OMARCHY_DEST/version" ]; then
+            DEST_DESC="$DEST_DESC (version $(<"$OMARCHY_DEST/version"))"
+        fi
+
+        echo "" >&2
+        echo "Error: $OMARCHY_DEST already holds a different Omarchy checkout." >&2
+        echo "       Found: $DEST_DESC" >&2
+        echo "       Copying over it would merge two trees into one broken repo." >&2
+        echo "       Move it aside first, then re-run this script:" >&2
+        echo "         mv $OMARCHY_DEST $OMARCHY_DEST.bak" >&2
+        exit 1
+    fi
+fi
+
+mkdir -p "$OMARCHY_DEST"
+# -f because git writes pack files mode 444: without it a second run dies with
+# "Permission denied" on .git/objects/pack/*, since cp cannot open a read-only
+# destination. -f unlinks and recreates instead.
+cp -rf . "$OMARCHY_DEST"
+cd "$OMARCHY_DEST"
+
+# Commit the CachyOS patches so the checkout is clean.
+#
+# This is what makes the upgrade to 4.x possible later. The patches are edits to
+# tracked files on a detached checkout of the pinned tag, and 4.x deletes the
+# whole install/ tree they live in. Left uncommitted they block every route
+# forward: `omarchy-update` refuses because HEAD is not on a branch,
+# `omarchy-branch-set master` refuses rather than overwrite local changes, and
+# `omarchy-update-branch master` stashes, switches, then hits modify/delete
+# conflicts on the pop and resurrects a dead install/ tree onto a 4.x checkout.
+# Committing costs nothing - the work is already done and the commit stays
+# reachable - and leaves `git switch master && omarchy-update` conflict-free.
+#
+# Identity is passed inline so this does not depend on the user having git
+# user.name/user.email configured, and does not write to their global config.
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+    git -c user.name="omarchy-on-cachyos" \
+        -c user.email="omarchy-on-cachyos@localhost" \
+        commit -aqm "$PATCH_COMMIT_MSG" \
+        && echo "Committed the CachyOS patches so the tree is clean for a later upgrade."
+fi
 
 # Pause and prompt for acknowledgment to begin installation
 echo ""
@@ -361,6 +430,14 @@ echo "NOTE: If you installed CachyOS without a desktop environment, you do not n
 echo "to do anything extra. SDDM is part of Omarchy's base package set, and Omarchy's"
 echo "install/login/sddm.sh sets up the Omarchy session, enables sddm.service, and"
 echo "configures autologin for your user, so the desktop starts on the next boot."
+echo ""
+echo "To upgrade to Omarchy 4.x later, switch branch and update:"
+echo " 1.) omarchy-branch-set master"
+echo " 2.) omarchy-update"
+echo ""
+echo "Do NOT use 'omarchy-channel-set' for this. It also runs omarchy-refresh-pacman,"
+echo "which overwrites /etc/pacman.conf with Omarchy's own and removes the CachyOS"
+echo "repositories (it backs the old one up to /etc/pacman.conf.bak first)."
 echo ""
 echo "The Omarchy boot splash (plymouth) is intentionally skipped so it does not"
 echo "conflict with the CachyOS boot setup. To enable it anyway, run:"
