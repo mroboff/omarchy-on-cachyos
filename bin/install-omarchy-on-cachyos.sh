@@ -173,6 +173,12 @@ fi\
     # Update mise activation to support both bash and fish
     sed -i 's/omarchy-cmd-present mise && eval "\$(mise activate bash)"/if [ "\$SHELL" = "\/bin\/bash" ] \&\& command -v mise \&> \/dev\/null; then\n  eval "\$(mise activate bash)"\nelif [ "\$SHELL" = "\/bin\/fish" ] \&\& command -v mise \&> \/dev\/null; then\n  mise activate fish | source\nfi/' config/uwsm/env
 
+    # Allow CachyOS by leaving the upstream Arch-derivative guard loop syntactically intact but empty
+    sed -i -E 's|^for marker in .*; do$|for marker in; do # CachyOS: derivatives allowed by omarchy-on-cachyos|' install/preflight/guard.sh
+
+    # Prevent silent abort in presentation.sh when no TTY is available
+    sed -i 's#TERM_SIZE=$(stty size 2>/dev/null </dev/tty)#TERM_SIZE=$(stty size 2>/dev/null </dev/tty || true)#' install/helpers/presentation.sh
+
     # Copy omarchy installation files to ~/.local/share/omarchy
     mkdir -p ~/.local/share/omarchy
     cp -r . ~/.local/share/omarchy
@@ -192,6 +198,8 @@ fi\
     echo " 9. Installed boot safety guards (mkinitcpio + limine)"
     echo "10. Disabled wpa_supplicant and configured NetworkManager to use iwd backend"
     echo "11. Pinned walker to omarchy repo to prevent CachyOS version conflict"
+    echo "12. Allowed CachyOS as an install target (disabled upstream Arch-derivative guard)"
+    echo "13. Made installer TTY-independent (stty no longer aborts headless installs)"
     echo ""
     echo "IMPORTANT: If you installed CachyOS without a desktop environment, you will not have a display manager installed."
     echo "If this is the case, you will need to run the following command after this installation script is complete:"
@@ -204,7 +212,7 @@ fi\
 
     # Run the modified install.sh script
     chmod +x install.sh
-    ./install.sh
+    TERM=xterm-256color script -qec './install.sh' /dev/null
 }
 
 # ============================================================================
