@@ -268,35 +268,45 @@ function install_v4 {
     # safe to run. Requires root; run in a single su'd helper.
     echo ""
     echo "Running Omarchy system setup (skipping post-install/pacman.sh)..."
-    local APPLY_SCRIPT="/tmp/omarchy-apply-cachyos.sh"
+    local APPLY_SCRIPT
     if [ -f "$OMARCHY_SHARE/install/helpers/logging.sh" ]; then
-        cat > "$APPLY_SCRIPT" << APPLYEOF
+        # mktemp + chmod 600: a fixed /tmp path piped through `sudo bash`
+        # is a privilege-escalation hole (local user pre-creates it, or swaps
+        # it in the sudo race window). 600 keeps it read-write by our user
+        # only, and root reads it via sudo.
+        APPLY_SCRIPT="$(mktemp /tmp/omarchy-apply-cachyos.XXXXXX.sh)"
+        chmod 600 "$APPLY_SCRIPT"
+        # Quoted delimiter: dynamic values (OMARCHY_PATH, INSTALL_USER) are
+        # injected through the sudo env instead of being interpolated here.
+        cat > "$APPLY_SCRIPT" << 'APPLYEOF'
 #!/bin/bash
 set -euo pipefail
-export OMARCHY_PATH="$OMARCHY_SHARE"
-export OMARCHY_INSTALL="\$OMARCHY_PATH/install"
-export OMARCHY_INSTALL_USER="${OMARCHY_USER_NAME}"
+export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+export OMARCHY_INSTALL="${OMARCHY_PATH}/install"
+export OMARCHY_INSTALL_USER="${OMARCHY_INSTALL_USER:-}"
 export OMARCHY_INSTALL_LOG_FILE="/var/log/omarchy-install.log"
 export OMARCHY_FIRST_INSTALL="0"
 export OMARCHY_UPGRADE="0"
-export PATH="\$OMARCHY_PATH/bin:\$PATH"
-source "\$OMARCHY_INSTALL/helpers/logging.sh"
+export PATH="${OMARCHY_PATH}/bin:${PATH}"
+source "${OMARCHY_INSTALL}/helpers/logging.sh"
 start_install_log
 echo "  -> config/all.sh"
-source "\$OMARCHY_INSTALL/config/all.sh"
-echo "  -> omarchy-apply-hardware --install-user ${OMARCHY_USER_NAME}"
-omarchy-apply-hardware --install-user "$OMARCHY_USER_NAME"
+source "${OMARCHY_INSTALL}/config/all.sh"
+echo "  -> omarchy-apply-hardware --install-user ${OMARCHY_INSTALL_USER}"
+omarchy-apply-hardware --install-user "${OMARCHY_INSTALL_USER}"
 echo "  -> login/all.sh"
-source "\$OMARCHY_INSTALL/login/all.sh"
+source "${OMARCHY_INSTALL}/login/all.sh"
 echo "  -> post-install/udev.sh (post-install/pacman.sh skipped)"
-run_logged "\$OMARCHY_INSTALL/post-install/udev.sh"
+run_logged "${OMARCHY_INSTALL}/post-install/udev.sh"
 echo "  -> post-install/localdb.sh"
-run_logged "\$OMARCHY_INSTALL/post-install/localdb.sh"
+run_logged "${OMARCHY_INSTALL}/post-install/localdb.sh"
 stop_install_log
 echo "SYSTEM_APPLY_DONE"
 APPLYEOF
-        sudo bash "$APPLY_SCRIPT" \
+        sudo OMARCHY_PATH="$OMARCHY_SHARE" OMARCHY_INSTALL_USER="${OMARCHY_USER_NAME}" \
+            bash "$APPLY_SCRIPT" \
             || echo "Warning: system apply returned non-zero"
+        rm -f "$APPLY_SCRIPT"
     else
         echo "Warning: $OMARCHY_SHARE/install/helpers/logging.sh not found; skipping system apply."
     fi

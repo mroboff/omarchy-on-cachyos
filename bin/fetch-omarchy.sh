@@ -68,7 +68,7 @@ fi
 
 # Export for the installer to use
 export OMARCHY_VERSION_MAJOR
-export OMARCHY_SELECTED_TAG
+export SELECTED_TAG
 
 # Ensure target directory is clean before git cloning to prevent fatal conflicts
 if [ -d "$TARGET_DIR" ]; then
