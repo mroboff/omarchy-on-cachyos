@@ -75,7 +75,7 @@ if ! grep -q '^\[omarchy\]' /etc/pacman.conf; then
 else
     echo "Omarchy repository already present in pacman.conf, skipping."
 fi
-sudo pacman -Syu
+sudo pacman -Syu --noconfirm
 
 # ============================================================================
 # Install boot safety guards BEFORE any omarchy-settings package
@@ -103,26 +103,6 @@ echo ""
 echo "Please enter your email address:"
 read -r OMARCHY_USER_EMAIL
 export OMARCHY_USER_EMAIL
-
-# ============================================================================
-# Branch: v3 (source) or v4 (packages)
-# ============================================================================
-
-if [ "$OMARCHY_VERSION_MAJOR" -eq 3 ]; then
-    echo ""
-    echo "=========================================="
-    echo "  Installing Omarchy v3.x (source mode)  "
-    echo "=========================================="
-    echo ""
-    install_v3
-else
-    echo ""
-    echo "=========================================="
-    echo "  Installing Omarchy v4.x (package mode) "
-    echo "=========================================="
-    echo ""
-    install_v4
-fi
 
 # ============================================================================
 # v3: Source-based install (original flow with patches)
@@ -233,100 +213,140 @@ fi\
 
 function install_v4 {
     local OMARCHY_SHARE="/usr/share/omarchy"
+    local USER_HOME
 
     echo "Installing Omarchy packages via pacman..."
     sudo pacman -S --needed --noconfirm omarchy omarchy-settings omarchy-nvim
 
-    echo "Installing omarchy-base.packages (minus tldr)..."
+    if [ ! -d "$OMARCHY_SHARE" ]; then
+        echo "Error: omarchy package installed but $OMARCHY_SHARE missing."
+        exit 1
+    fi
+
+    # --- Base packages (filtered for CachyOS) ---
+    echo "Installing omarchy-base.packages (filtered for CachyOS)..."
     if [ -f "$OMARCHY_SHARE/install/omarchy-base.packages" ]; then
-        grep -v '^tldr$' "$OMARCHY_SHARE/install/omarchy-base.packages" | sudo pacman -S --needed --noconfirm -
+        local FILTERED="/tmp/omarchy-base.cachyos.packages"
+        # Remove tldr (CachyOS ships tealdeer), replace nvim with neovim
+        # (omarchy's nvim rebuild lives only in their pinned Arch mirror),
+        # and normalize quickshell-git to quickshell if present.
+        grep -vE '^\s*(#|$)' "$OMARCHY_SHARE/install/omarchy-base.packages" \
+            | sed -e '/^tldr$/d' \
+                  -e 's/^nvim$/neovim/' \
+                  -e 's/^quickshell-git$/quickshell/' \
+            > "$FILTERED"
+        echo "Filtered package list:"
+        cat "$FILTERED"
+        sudo pacman -S --needed --noconfirm - < "$FILTERED" \
+            || echo "Warning: some packages could not be installed."
     else
         echo "Warning: omarchy-base.packages not found at $OMARCHY_SHARE/install/"
     fi
 
-    # --- Hardware scripts ---
-    echo ""
-    echo "Running hardware configuration scripts..."
-
-    # nvidia: use our CachyOS-aware version
+    # --- Overlay our CachyOS-aware nvidia.sh ---
+    # The v4 upstream nvidia.sh installs DKMS drivers that conflict with
+    # CachyOS's prebuilt linux-cachyos-nvidia-open. Overlay our copy so
+    # refresh/hardware runs (omarchy-apply-hardware) use the CachyOS-aware
+    # logic instead.
     if [ -f "$OMARCHY_SHARE/install/hardware/nvidia.sh" ]; then
-        echo "Running CachyOS-aware nvidia.sh..."
-        chmod +x "$SCRIPT_DIR/nvidia.sh"
-        "$SCRIPT_DIR/nvidia.sh"
+        echo "Overlaying CachyOS-aware nvidia.sh into $OMARCHY_SHARE..."
+        sudo cp "$SCRIPT_DIR/nvidia.sh" "$OMARCHY_SHARE/install/hardware/nvidia.sh"
+        sudo chmod +x "$OMARCHY_SHARE/install/hardware/nvidia.sh"
     fi
 
-    # network: v4 centralizes on NetworkManager (disables iwd)
-    # The fork's wpa_supplicant/iwd block is no longer needed for v4
-    if [ -f "$OMARCHY_SHARE/install/hardware/network.sh" ]; then
-        echo "Running network.sh..."
-        sudo bash "$OMARCHY_SHARE/install/hardware/network.sh"
-    fi
-
-    # --- Post-install (skip pacman.sh) ---
+    # --- System apply (replicates omarchy-apply-system minus pacman.sh) ---
+    # post-install/pacman.sh overwrites /etc/pacman.conf and the mirrorlist
+    # with Omarchy's — a partial-upgrade hazard on CachyOS. Everything else is
+    # safe to run. Requires root; run in a single su'd helper.
     echo ""
-    echo "Running post-install scripts (skipping pacman.sh)..."
-
-    if [ -f "$OMARCHY_SHARE/install/post-install/all.sh" ]; then
-        # Source individual scripts, skipping pacman.sh
-        for script in "$OMARCHY_SHARE/install/post-install/"*.sh; do
-            SCRIPT_NAME=$(basename "$script")
-            if [ "$SCRIPT_NAME" = "pacman.sh" ] || [ "$SCRIPT_NAME" = "all.sh" ]; then
-                echo "  Skipping $SCRIPT_NAME"
-                continue
-            fi
-            echo "  Running $SCRIPT_NAME..."
-            sudo bash "$script" || echo "  Warning: $SCRIPT_NAME returned non-zero"
-        done
+    echo "Running Omarchy system setup (skipping post-install/pacman.sh)..."
+    local APPLY_SCRIPT="/tmp/omarchy-apply-cachyos.sh"
+    if [ -f "$OMARCHY_SHARE/install/helpers/logging.sh" ]; then
+        cat > "$APPLY_SCRIPT" << APPLYEOF
+#!/bin/bash
+set -euo pipefail
+export OMARCHY_PATH="$OMARCHY_SHARE"
+export OMARCHY_INSTALL="\$OMARCHY_PATH/install"
+export OMARCHY_INSTALL_USER="${OMARCHY_USER_NAME}"
+export OMARCHY_INSTALL_LOG_FILE="/var/log/omarchy-install.log"
+export OMARCHY_FIRST_INSTALL="0"
+export OMARCHY_UPGRADE="0"
+export PATH="\$OMARCHY_PATH/bin:\$PATH"
+source "\$OMARCHY_INSTALL/helpers/logging.sh"
+start_install_log
+echo "  -> config/all.sh"
+source "\$OMARCHY_INSTALL/config/all.sh"
+echo "  -> omarchy-apply-hardware --install-user ${OMARCHY_USER_NAME}"
+omarchy-apply-hardware --install-user "$OMARCHY_USER_NAME"
+echo "  -> login/all.sh"
+source "\$OMARCHY_INSTALL/login/all.sh"
+echo "  -> post-install/udev.sh (post-install/pacman.sh skipped)"
+run_logged "\$OMARCHY_INSTALL/post-install/udev.sh"
+echo "  -> post-install/localdb.sh"
+run_logged "\$OMARCHY_INSTALL/post-install/localdb.sh"
+stop_install_log
+echo "SYSTEM_APPLY_DONE"
+APPLYEOF
+        sudo bash "$APPLY_SCRIPT" \
+            || echo "Warning: system apply returned non-zero"
+    else
+        echo "Warning: $OMARCHY_SHARE/install/helpers/logging.sh not found; skipping system apply."
     fi
 
     # --- User configuration ---
     echo ""
     echo "Configuring user..."
 
-    # User configs ship via /etc/skel — copy to home
-    if [ -d /etc/skel ]; then
-        cp -af /etc/skel/. "$HOME/"
-        echo "Copied skel configs to $HOME"
+    # Run user provisioning as the target user (NOT root).
+    # --force only — --first-install forces OMARCHY_SETUP_CONTEXT=iso-chroot,
+    # which hard-fails on a missing /opt/packages Node tarball.
+    USER_HOME=$(getent passwd "$OMARCHY_USER_NAME" | cut -d: -f6)
+    if command -v omarchy-provision-user &>/dev/null && [ -n "$USER_HOME" ]; then
+        echo "Running omarchy-provision-user --force as $OMARCHY_USER_NAME..."
+        sudo -u "$OMARCHY_USER_NAME" env \
+            HOME="$USER_HOME" \
+            OMARCHY_PATH="$OMARCHY_SHARE" \
+            OMARCHY_INSTALL="$OMARCHY_SHARE/install" \
+            omarchy-provision-user --force \
+            || echo "Warning: omarchy-provision-user returned non-zero"
+    elif [ -f "$OMARCHY_SHARE/bin/omarchy-provision-user" ]; then
+        echo "Running $OMARCHY_SHARE/bin/omarchy-provision-user --force..."
+        sudo -u "$OMARCHY_USER_NAME" env \
+            HOME="$USER_HOME" \
+            OMARCHY_PATH="$OMARCHY_SHARE" \
+            OMARCHY_INSTALL="$OMARCHY_SHARE/install" \
+            bash "$OMARCHY_SHARE/bin/omarchy-provision-user" --force \
+            || echo "Warning: omarchy-provision-user returned non-zero"
     fi
 
-    # Run user provisioning without --first-install (avoids iso-chroot context)
-    if command -v omarchy-provision-user &>/dev/null; then
-        echo "Running omarchy-provision-user --force..."
-        omarchy-provision-user --force || echo "Warning: omarchy-provision-user returned non-zero"
+    # User configs ship via /etc/skel — copy to home so the current account
+    # gets them now
+    if [ -d /etc/skel ]; then
+        echo "Copying /etc/skel to $USER_HOME..."
+        sudo -u "$OMARCHY_USER_NAME" cp -af /etc/skel/. "$USER_HOME/"
     fi
 
     # --- SDDM login ---
+    # The Omarchy SDDM theme has no username field; it logs in the last user
+    # via state.conf. Regex-averse: state.conf must exist and name the user,
+    # and autologin uses the omarchy desktop entry (not hyprland).
     echo ""
-    echo "Configuring SDM login..."
+    echo "Configuring SDDM login..."
+    sudo mkdir -p /var/lib/sddm
+    printf '[Last]\nSession=omarchy.desktop\nUser=%s\n' "$OMARCHY_USER_NAME" \
+        | sudo tee /var/lib/sddm/state.conf > /dev/null
+    sudo chown -R sddm:sddm /var/lib/sddm 2>/dev/null || true
 
-    # Create state.conf for SDDM (needed for username detection)
-    if [ ! -f /var/lib/sddm/state.conf ]; then
-        sudo mkdir -p /var/lib/sddm
-        echo "[General]" | sudo tee /var/lib/sddm/state.conf > /dev/null
-        echo "LastUser=$OMARCHY_USER_NAME" | sudo tee -a /var/lib/sddm/state.conf > /dev/null
-        echo "Created /var/lib/sddm/state.conf"
-    fi
-
-    # Configure autologin
     sudo mkdir -p /etc/sddm.conf.d
-    if [ ! -f /etc/sddm.conf.d/autologin.conf ]; then
-        sudo tee /etc/sddm.conf.d/autologin.conf > /dev/null << AUTEOF
-[Autologin]
-User=$OMARCHY_USER_NAME
-Session=hyprland
-AUTEOF
-        echo "Created /etc/sddm.conf.d/autologin.conf"
-    fi
+    printf '[Autologin]\nUser=%s\nSession=omarchy.desktop\n' "$OMARCHY_USER_NAME" \
+        | sudo tee /etc/sddm.conf.d/autologin.conf > /dev/null
+    echo "SDDM autologin configured for $OMARCHY_USER_NAME (omarchy.desktop)."
 
     # --- Boot entries ---
-    echo ""
-    echo "Refreshing boot entries..."
-    if command -v omarchy-refresh-limine &>/dev/null; then
-        # Only refresh if limine is the bootloader
-        if [ -d /boot/limine ]; then
-            omarchy-refresh-limine || echo "Warning: limine refresh returned non-zero"
-        fi
-    fi
+    # Deliberately do NOT call omarchy-refresh-limine or omarchy-refresh-plymouth:
+    # they replace limine.conf with a theming-only template and rebuild the
+    # initramfs, bypassing the CachyOS hooks guard. CachyOS's limine-snapper-sync
+    # + our /etc/default/limine guard keep the real boot entries correct.
 
     # --- Summary ---
     echo ""
@@ -336,9 +356,30 @@ AUTEOF
     echo ""
     echo "  - Packages installed via pacman"
     echo "  - Boot safety guards active (mkinitcpio + limine)"
-    echo "  - SDDM configured for autologin"
+    echo "  - SDDM configured for $OMARCHY_USER_NAME (omarchy.desktop)"
     echo "  - NVIDIA driver configured (CachyOS-aware)"
     echo ""
     echo "You may need to reboot for all changes to take effect."
     echo ""
 }
+
+# ============================================================================
+# Branch: v3 (source) or v4 (packages)
+# Note: dispatched AFTER function definitions so both branches resolve.
+# ============================================================================
+
+if [ "$OMARCHY_VERSION_MAJOR" -eq 3 ]; then
+    echo ""
+    echo "=========================================="
+    echo "  Installing Omarchy v3.x (source mode)  "
+    echo "=========================================="
+    echo ""
+    install_v3
+else
+    echo ""
+    echo "=========================================="
+    echo "  Installing Omarchy v4.x (package mode) "
+    echo "=========================================="
+    echo ""
+    install_v4
+fi
