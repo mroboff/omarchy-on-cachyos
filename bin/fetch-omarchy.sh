@@ -85,9 +85,9 @@ if [ -d "$TARGET_DIR" ]; then
     fi
 fi
 
-# Execute clean, quiet checkout bypassing standard detached HEAD advice warnings
+# Execute clean checkout bypassing standard detached HEAD advice warnings
 echo "Cloning into $TARGET_DIR..."
-if ! git -c advice.detachedHead=false clone --quiet $BRANCH_ARGS $REPO_URL "$TARGET_DIR"; then
+if ! git -c advice.detachedHead=false clone $BRANCH_ARGS $REPO_URL "$TARGET_DIR"; then
     echo "Error: Failed to clone Omarchy repo."
     exit 1
 fi
