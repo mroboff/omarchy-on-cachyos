@@ -163,10 +163,36 @@ uninstall() {
 }
 
 # ---------------------------------------------------------------------------
+# CachyOS migration guards
+# ---------------------------------------------------------------------------
+guard_cachyos_migrations() {
+  local mig_file="/usr/share/omarchy/migrations/1791403310.sh"
+  if [ -f "$mig_file" ]; then
+    local home ustate uowner
+    for home in /home/*; do
+      [ -d "$home" ] || continue
+      ustate="$home/.local/state/omarchy/migrations"
+      if [ ! -f "$ustate/1791403310.sh" ]; then
+        mkdir -p "$ustate"
+        touch "$ustate/1791403310.sh"
+        uowner="$(stat -c '%u:%g' "$home" 2>/dev/null || true)"
+        [ -n "$uowner" ] && chown -R "$uowner" "$home/.local/state/omarchy" 2>/dev/null || true
+      fi
+    done
+    if [ -d /etc/skel ]; then
+      mkdir -p /etc/skel/.local/state/omarchy/migrations
+      touch /etc/skel/.local/state/omarchy/migrations/1791403310.sh
+    fi
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 main() {
   [ "$UNINSTALL" = "1" ] && { uninstall; return 0; }
+
+  guard_cachyos_migrations
 
   log "Qt6-base detectado: $(qt_version || echo ausente)"
   if ! qt_problematic; then
@@ -174,7 +200,7 @@ main() {
     return 0
   fi
 
-  local shell_needs pd pdir changed=0
+  local shell_needs pdir changed=0
   shell_needs=$(has_unqualified_color "$SHELL_DIR" | wc -l)
   if [ "$CHECK" = "1" ]; then
     if [ "$shell_needs" -gt 0 ]; then

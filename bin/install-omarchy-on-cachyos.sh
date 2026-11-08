@@ -562,6 +562,25 @@ MKEOF
     # initramfs, bypassing the CachyOS hooks guard. CachyOS's limine-snapper-sync
     # + our /etc/default/limine guard keep the real boot entries correct.
 
+    # --- CachyOS compatibility guards and hooks ---
+    echo ""
+    echo "Installing CachyOS update safety guards..."
+    if [ -f "$SCRIPT_DIR/omarchy-qt-color-fix.sh" ]; then
+        sudo install -m 755 "$SCRIPT_DIR/omarchy-qt-color-fix.sh" /usr/local/bin/omarchy-qt-color-fix.sh
+        sudo install -Dm 644 "$SCRIPT_DIR/omarchy-qt-color-fix.hook" /etc/pacman.d/hooks/omarchy-qt-color-fix.hook
+        sudo /usr/local/bin/omarchy-qt-color-fix.sh
+    fi
+
+    if [ -f "$SCRIPT_DIR/cachyos-mirror-order.sh" ]; then
+        sudo install -m 755 "$SCRIPT_DIR/cachyos-mirror-order.sh" /usr/local/bin/cachyos-mirror-order.sh
+        sudo install -Dm 644 "$SCRIPT_DIR/omarchy-mirror-order.service" /etc/systemd/system/omarchy-mirror-order.service
+        sudo install -Dm 644 "$SCRIPT_DIR/omarchy-mirror-order.hook" /etc/pacman.d/hooks/omarchy-mirror-order.hook
+        sudo install -Dm 644 "$SCRIPT_DIR/cachyos-rate-mirrors.service.d/omarchy-mirror-order.conf" \
+            /etc/systemd/system/cachyos-rate-mirrors.service.d/omarchy-mirror-order.conf
+        sudo systemctl daemon-reload
+        sudo /usr/local/bin/cachyos-mirror-order.sh
+    fi
+
     # --- Summary ---
     echo ""
     echo "=========================================="
