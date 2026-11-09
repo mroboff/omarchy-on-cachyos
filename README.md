@@ -43,7 +43,13 @@ The philosophy behind this script is to produce a strong and stable blend of Cac
 
 6. Full Disk Encryption: As a distribution, Omarchy automatically turns on full disk encryption via LUKS. This script, however, leaves this decision up to the user. CachyOS can be installed with or without full disk encryption, and this script will install Omarchy on either setup.
 
-7. NVIDIA Drivers: *By default, CachyOS and Omarchy may attempt to use the latest NVIDIA drivers with open kernel modules. This script explicitly downgrades/pins the driver to the* *580xx proprietary series* *using CachyOS's* `chwd` *tool. This is a deliberate choice to fix widespread issues with hardware acceleration, electron apps, and browser flickering.*
+7. NVIDIA Drivers: *By default, CachyOS and Omarchy may attempt to use the latest NVIDIA drivers with open kernel modules. This script does **not** downgrade or pin any driver: it detects whatever NVIDIA driver CachyOS already has installed and respects it. Only if no NVIDIA driver is present at all does it install one via CachyOS's* `chwd` *tool.*
+
+8. Mirror ordering: *CachyOS's* `cachyos-rate-mirrors` *timer regenerates the pacman mirrorlists three times a day, ranking mirrors with a ~300 ms probe. That probe can mis-rank a mirror that has since degraded — we measured* `ca.mirror.cx` *at 5 KB/s while it sat first in the list, and* `omarchy update` *crawled at ~20 KiB/s with a 40-minute ETA while the third mirror served 30 MB/s. This script installs* `cachyos-mirror-order.sh`, *which re-measures every mirror with a real transfer and rewrites the* `Server` *lines fastest-first. It runs automatically right after* `cachyos-rate-mirrors` *(systemd drop-in) *and after the* `cachyos-mirrorlist` *package is upgraded (pacman hook). Slow mirrors are demoted, never removed, so they remain usable as fallback. Re-run it manually with:* `sudo cachyos-mirror-order.sh` *(*--dry-run` *to preview).*
+
+9. Hyprland titlebars migration guard: *In CachyOS, Hyprland packages are rolling and updated independently from Omarchy's repository. This script excludes* `omarchy-hyprland-titlebars` *from base package installation and pre-emptively marks migration* `1791403310.sh` *as completed, preventing* `omarchy update` *from aborting when Omarchy's upstream repository pins an older Hyprland version.*
+
+10. Accelerated AUR downloads: *Configures* `~/.config/pacman/makepkg.conf` *with* `aria2c` *(16 parallel streams) for HTTP/HTTPS source downloads, avoiding single-connection throttling on large AUR packages.*
 
 ## 4. Pre-Requisites
 
@@ -57,7 +63,7 @@ IMPORTANT: This script does not install CachyOS. You must do that separately (an
 
 4. Graphics Drivers for NVIDIA users: 
 
-5. This script now automatically handles NVIDIA driver installation by enforcing the proprietary 580xx drivers (via CachyOS `chwd`). This is necessary to avoid known regressions with hardware video decoding and browser flickering present in the newer open-kernel module drivers.
+5. This script now automatically handles the NVIDIA driver: if CachyOS already has a working NVIDIA driver installed it leaves it untouched (it never downgrades or force-replaces it); when no driver is present, it installs one via CachyOS `chwd`. Note that the proprietary 580xx-series note from older revisions no longer applies.
 
    **Important:** 
 
@@ -91,7 +97,7 @@ Other configuration changes are up to you. Note, however, that this script has n
 
 ```bash
 # Clone the repository
-git clone https://github.com/mroboff/omarchy-on-cachyos.git
+git clone https://github.com/marlo4220mc/omarchy-on-cachyos.git
 
 # Navigate to the project directory
 cd omarchy-on-cachyos/bin

@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = cachyos-mirrorlist
+
+[Action]
+Description=Reordering pacman mirrorlists by measured speed...
+When = PostTransaction
+Exec = /usr/local/bin/cachyos-mirror-order.sh

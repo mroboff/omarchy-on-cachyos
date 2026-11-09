@@ -1,0 +1,8 @@
+[Unit]
+Description=Reorder the pacman mirrorlists by measured speed (omarchy-on-cachyos)
+Documentation=https://github.com/marlo4220mc/omarchy-on-cachyos
+After=cachyos-rate-mirrors.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cachyos-mirror-order.sh

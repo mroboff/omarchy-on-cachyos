@@ -1,0 +1,40 @@
+# /etc/pacman.d/hooks/omarchy-qt-color-fix.hook
+#
+# Re-aplica el fix temporal del singleton `Color` (omacom/omarchy#14469)
+# AUTOMÁTICAMENTE después de cada update que toque el shell de omarchy.
+#
+# Por qué: los updates de omarchy hacen `pacman -Syu --overwrite
+# '/usr/share/omarchy/*'`, así que cualquier versión nueva de un paquete que
+# lleve esos archivos pisa /usr/share/omarchy/shell con la plantilla SIN
+# corregir. Con Qt 6.12+ (que añade el tipo QML `Color` en QtQuick) eso deja
+# el menú 100% negro de nuevo.
+#
+# Dispara en DOS casos (OR):
+#   1. Type=Package  Target=omarchy        → cuando se instala/actualiza el
+#                                            paquete omarchy.
+#   2. Type=Path     Target=usr/share/omarchy/shell/*  → cuando CUALQUIER
+#                                            update toque archivos del shell,
+#                                            venga del paquete que venga.
+#
+# El script es idempotente: si el árbol ya está corregido (o si omarchy ya
+# publicó su fix oficial) no toca nada y no reinicia tu shell. Es un no-op.
+#
+# Retirar cuando omarchy publique el fix en su paquete:
+#   sudo /usr/local/bin/omarchy-qt-color-fix.sh --uninstall
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = omarchy
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Path
+Target = usr/share/omarchy/shell/*
+
+[Action]
+Description = Re-aplicando fix singleton Color (Qt 6.12) tras update de omarchy
+When = PostTransaction
+Exec = /usr/local/bin/omarchy-qt-color-fix.sh
